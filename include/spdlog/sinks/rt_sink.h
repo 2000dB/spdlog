@@ -1,6 +1,6 @@
 /*************************************************************************/
 /* spdlog - an extremely fast and easy to use c++11 logging library.     */
-/* Copyright (c) 2014 Gabi Melman.                                       */
+/* Copyright (c) 2015 Francois Coulombe.                                       */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -22,47 +22,51 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
+
 #pragma once
 
-#include <iostream>
-#include <mutex>
-#include "./ostream_sink.h"
-#include "../details/null_mutex.h"
+#ifdef RTPRINT
 
-#include "rt_sink.h"
+#include <ostream>
+#include <mutex>
+#include <memory>
+#include <rtprint>
+#include "../details/null_mutex.h"
+#include "./base_sink.h"
+
 
 namespace spdlog
 {
 namespace sinks
 {
+template<class Mutex>
+class rt_sink: public base_sink<Mutex>
+{
+public:
+    explicit rt_sink(std::ostream& /*os*/, bool force_flush=false)
+    ://_ostream(os),
+    _force_flush(force_flush) 
+    {
+        rt_print_auto_init(1); // initialize rt_print
+    }
+    rt_sink(const rt_sink&) = delete;
+    rt_sink& operator=(const rt_sink&) = delete;
+    virtual ~rt_sink() = default;
 
-template <class Mutex>
-#ifdef RTPRINT
-    #define outstream_sink rt_sink
-#else
-    #define outstream_sink ostream_sink
+protected:
+    virtual void _sink_it(const details::log_msg& msg) override
+    {
+        rt_print(msg.formatted.data());
+        //((void)__rt_log_print(LoveLevelMapping[msg.level], msg.logger_name.c_str(), msg.formatted.data()));
+    }
+
+    //std::ostream& _ostream;
+    bool _force_flush;
+};
+
+typedef rt_sink<std::mutex> rt_sink_mt;
+typedef rt_sink<details::null_mutex> rt_sink_st;
+}
+}
+
 #endif
-
-class stdout_sink : public outstream_sink<Mutex>
-{
-public:
-    stdout_sink() : outstream_sink<Mutex>(std::cout, true) {}
-
-
-};
-
-typedef stdout_sink<details::null_mutex> stdout_sink_st;
-typedef stdout_sink<std::mutex> stdout_sink_mt;
-
-
-template <class Mutex>
-class stderr_sink : public outstream_sink<Mutex>
-{
-public:
-    stderr_sink() : outstream_sink<Mutex>(std::cerr, true) {}
-};
-
-typedef stderr_sink<std::mutex> stderr_sink_mt;
-typedef stderr_sink<details::null_mutex> stderr_sink_st;
-}
-}
